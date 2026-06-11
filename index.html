@@ -6,14 +6,14 @@
 <title>ToDo アプリ</title>
 <style>
   :root {
-    --bg: #f4f5f7;
+    --bg: #ffffff;
     --card: #ffffff;
-    --accent: #4f6df5;
-    --accent-hover: #3d59e0;
-    --text: #1f2430;
-    --muted: #8b91a0;
-    --border: #e3e6ec;
-    --done: #a0a6b3;
+    --accent: #8b5e3c;
+    --accent-hover: #74492c;
+    --text: #4a3220;
+    --muted: #a08e7d;
+    --border: #e7ddd2;
+    --done: #bcae9f;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -429,12 +429,23 @@
     return copy;
   }
 
+  // カテゴリーを作成順に割り当てる固定パレット
+  // 1:白 2:黄色 3:薄いピンク 4:薄い水色 5:薄い緑（6個目以降は繰り返し）
+  const CATEGORY_PALETTE = [
+    { card: "#ffffff", bg: "#efece6", fg: "#6b5d4f", border: "#e2d9cd" },
+    { card: "#fff8dd", bg: "#ffe79c", fg: "#856611", border: "#efe0a4" },
+    { card: "#ffedf1", bg: "#ffc5d3", fg: "#9b3d58", border: "#f5cfd7" },
+    { card: "#e7f4fb", bg: "#b3def5", fg: "#27607f", border: "#cce4f0" },
+    { card: "#eaf7eb", bg: "#bce4bf", fg: "#317638", border: "#cfeacf" }
+  ];
+
   function categoryColors(name) {
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = (hash * 31 + name.charCodeAt(i)) % 360;
+    const order = [];
+    for (const t of tasks) {
+      if (t.category && !order.includes(t.category)) order.push(t.category);
     }
-    return { bg: `hsl(${hash}, 70%, 92%)`, fg: `hsl(${hash}, 55%, 32%)` };
+    const idx = order.indexOf(name);
+    return CATEGORY_PALETTE[(idx < 0 ? 0 : idx) % CATEGORY_PALETTE.length];
   }
 
   function categories() {
@@ -474,6 +485,11 @@
     for (const t of visible) {
       const li = document.createElement("li");
       li.className = "task" + (t.done ? " done" : "");
+      if (t.category) {
+        const cc = categoryColors(t.category);
+        li.style.background = cc.card;
+        li.style.borderColor = cc.border;
+      }
 
       const cb = document.createElement("input");
       cb.type = "checkbox";

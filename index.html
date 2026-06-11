@@ -257,12 +257,123 @@
     padding: 32px 0;
     font-size: 0.9rem;
   }
+  /* ===== 認証画面 ===== */
+  .auth-screen {
+    width: 100%;
+    max-width: 360px;
+    margin: 8vh auto 0;
+  }
+  .auth-screen h1 { font-size: 1.8rem; }
+  .auth-screen .subtitle { margin-bottom: 28px; }
+  .auth-field {
+    width: 100%;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 1rem;
+    background: var(--card);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .auth-field:focus { border-color: var(--accent); }
+  .auth-btn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    cursor: pointer;
+    margin-top: 4px;
+    transition: background 0.15s, opacity 0.15s;
+  }
+  .auth-btn.primary { background: var(--accent); color: #fff; }
+  .auth-btn.primary:hover { background: var(--accent-hover); }
+  .auth-btn.ghost {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--border);
+    margin-top: 10px;
+  }
+  .auth-btn.ghost:hover { background: rgba(139, 94, 60, 0.06); }
+  .auth-btn:disabled { opacity: 0.5; cursor: default; }
+  .auth-error {
+    color: #e5484d;
+    font-size: 0.82rem;
+    margin: 4px 0 8px;
+    min-height: 0;
+    line-height: 1.5;
+  }
+  .auth-msg {
+    color: var(--accent);
+    font-size: 0.82rem;
+    margin-top: 12px;
+    text-align: center;
+    line-height: 1.5;
+  }
+  /* ===== ユーザーバー ===== */
+  .user-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 18px;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+  .user-bar .who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .user-bar .who span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sync-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted); flex-shrink: 0;
+    transition: background 0.2s;
+  }
+  .sync-dot.online { background: #3aa657; }
+  .sync-dot.syncing { background: #d98700; }
+  .sync-dot.offline { background: #bcae9f; }
+  #logout-btn {
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--muted);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  #logout-btn:hover { color: var(--accent); border-color: var(--accent); }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
-  <div class="app">
+  <!-- ログイン画面 -->
+  <div id="auth-screen" class="auth-screen" hidden>
     <h1>ToDo</h1>
-    <p class="subtitle">タスクはこのブラウザに自動保存されます</p>
+    <p class="subtitle">ログインすると、どの端末からでもタスクを同期できます</p>
+    <input id="auth-email" class="auth-field" type="email" placeholder="メールアドレス" autocomplete="email">
+    <input id="auth-password" class="auth-field" type="password" placeholder="パスワード（6文字以上）" autocomplete="current-password">
+    <div id="auth-error" class="auth-error"></div>
+    <button id="login-btn" class="auth-btn primary">ログイン</button>
+    <button id="signup-btn" class="auth-btn ghost">新規登録</button>
+    <div id="auth-msg" class="auth-msg"></div>
+  </div>
+
+  <div class="app" hidden>
+    <div id="user-bar" class="user-bar">
+      <div class="who">
+        <span class="sync-dot" id="sync-dot" title=""></span>
+        <span id="user-email"></span>
+      </div>
+      <button id="logout-btn">ログアウト</button>
+    </div>
+    <h1>ToDo</h1>
+    <p class="subtitle">タスクはクラウドに保存され、全端末で同期されます</p>
 
     <div class="input-row">
       <input id="task-input" type="text" placeholder="例: レポート提出 明日 仕事" autocomplete="off">
@@ -301,8 +412,17 @@
     </div>
   </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
+  // ===== Supabase 設定 =====
+  const SUPABASE_URL = "https://riqqhxrsrkirzuclqoqy.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_4WnVryleDgzU1InULISfPQ_3C2iC63Z";
+  const sb = window.supabase
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+    : null;
+
   const STORAGE_KEY = "todo-app-tasks";
+  const QUEUE_KEY = "todo-app-sync-queue";
   const input = document.getElementById("task-input");
   const preview = document.getElementById("preview");
   const categoryFilter = document.getElementById("category-filter");
@@ -313,11 +433,25 @@
   const clearBtn = document.getElementById("clear-done");
   const filterBtns = document.querySelectorAll(".filter-btn");
 
+  // 認証・同期まわりの要素
+  const authScreen = document.getElementById("auth-screen");
+  const appEl = document.querySelector(".app");
+  const authEmail = document.getElementById("auth-email");
+  const authPassword = document.getElementById("auth-password");
+  const authError = document.getElementById("auth-error");
+  const authMsg = document.getElementById("auth-msg");
+  const loginBtn = document.getElementById("login-btn");
+  const signupBtn = document.getElementById("signup-btn");
+  const logoutBtn = document.getElementById("logout-btn");
+  const userEmailEl = document.getElementById("user-email");
+  const syncDot = document.getElementById("sync-dot");
+
   let tasks = load();
   let filter = "all";
   let sortBy = "created";
   let categoryFilterValue = "all";
   let editingId = null;
+  let user = null; // ログイン中のユーザー（未ログインは null）
 
   function load() {
     try {
@@ -420,19 +554,22 @@
   function addTask(raw) {
     const parsed = parseInput(raw);
     if (!parsed.title) return;
-    tasks.push({ id: newId(), text: parsed.title, done: false, due: parsed.due, category: parsed.category });
+    const t = { id: newId(), text: parsed.title, done: false, due: parsed.due, category: parsed.category };
+    tasks.push(t);
     save();
+    queueUpsert(t);
     render();
   }
 
   function toggleTask(id) {
     const t = tasks.find(t => t.id === id);
-    if (t) { t.done = !t.done; save(); render(); }
+    if (t) { t.done = !t.done; save(); queueUpsert(t); render(); }
   }
 
   function deleteTask(id) {
     tasks = tasks.filter(t => t.id !== id);
     save();
+    queueDelete(id);
     render();
   }
 
@@ -463,12 +600,15 @@
     t.category = parsed.category;
     editingId = null;
     save();
+    queueUpsert(t);
     render();
   }
 
   function clearDone() {
+    const removed = tasks.filter(t => t.done);
     tasks = tasks.filter(t => !t.done);
     save();
+    removed.forEach(t => queueDelete(t.id));
     render();
   }
 
@@ -721,7 +861,219 @@
     });
   });
 
-  render();
+  // ================= 同期キュー =================
+  // オフライン時や送信失敗時に操作を貯めておき、オンライン復帰時にまとめて送る
+  function loadQueue() {
+    try { return JSON.parse(localStorage.getItem(QUEUE_KEY)) || []; }
+    catch { return []; }
+  }
+  function saveQueue(q) {
+    try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); } catch {}
+  }
+  function queueUpsert(t) {
+    const q = loadQueue().filter(op => op.id !== t.id);
+    q.push({ type: "upsert", id: t.id, data: { text: t.text, done: t.done, due: t.due, category: t.category } });
+    saveQueue(q);
+    flushQueue();
+  }
+  function queueDelete(id) {
+    const q = loadQueue().filter(op => op.id !== id);
+    q.push({ type: "delete", id });
+    saveQueue(q);
+    flushQueue();
+  }
+
+  let flushing = false;
+  async function flushQueue() {
+    if (!sb || !user || !navigator.onLine || flushing) return;
+    flushing = true;
+    setSync("syncing");
+    try {
+      while (loadQueue().length) {
+        const op = loadQueue()[0];
+        if (op.type === "upsert") {
+          const { error } = await sb.from("tasks").upsert({
+            id: op.id, user_id: user.id, ...op.data
+          });
+          if (error) throw error;
+        } else if (op.type === "delete") {
+          const { error } = await sb.from("tasks").delete().eq("id", op.id);
+          if (error) throw error;
+        }
+        // 成功したら先頭を1件除去（処理中に積まれた分も保持される）
+        const cur = loadQueue();
+        cur.shift();
+        saveQueue(cur);
+      }
+      setSync("online");
+    } catch (e) {
+      console.warn("同期に失敗しました（後で再試行します）", e);
+      setSync("offline");
+    } finally {
+      flushing = false;
+    }
+  }
+
+  // サーバーから取得してローカルを更新（サーバーを正とする）
+  async function pullFromServer() {
+    if (!sb || !user || !navigator.onLine) return;
+    // 未送信の変更が残っているなら先に送る（取得で上書きしないため）
+    if (loadQueue().length) { await flushQueue(); if (loadQueue().length) return; }
+    const { data, error } = await sb.from("tasks").select("*");
+    if (error) { console.warn("取得に失敗", error); setSync("offline"); return; }
+    tasks = data.map(r => ({
+      id: Number(r.id), text: r.text, done: r.done, due: r.due, category: r.category
+    }));
+    save();
+    render();
+    setSync("online");
+  }
+
+  // ログイン直後：ローカルにある未同期タスクをアカウントへ取り込み、その後サーバーと同期
+  async function fullSync() {
+    if (!sb || !user) return;
+    // 現在ローカルにあるタスクをアップロード対象としてキューに積む（重複は upsert で吸収）
+    const existing = loadQueue();
+    const queuedIds = new Set(existing.filter(o => o.type === "upsert").map(o => o.id));
+    for (const t of tasks) {
+      if (!queuedIds.has(t.id)) {
+        existing.push({ type: "upsert", id: t.id, data: { text: t.text, done: t.done, due: t.due, category: t.category } });
+      }
+    }
+    saveQueue(existing);
+    await flushQueue();
+    await pullFromServer();
+  }
+
+  function setSync(state) {
+    if (!syncDot) return;
+    syncDot.className = "sync-dot " + state;
+    syncDot.title = state === "online" ? "同期済み"
+      : state === "syncing" ? "同期中…"
+      : "オフライン（後で同期します）";
+  }
+
+  // ================= 認証 =================
+  function showAuth() {
+    authScreen.hidden = false;
+    appEl.hidden = true;
+  }
+  function showApp() {
+    authScreen.hidden = true;
+    appEl.hidden = false;
+  }
+
+  function setAuthBusy(busy) {
+    loginBtn.disabled = busy;
+    signupBtn.disabled = busy;
+  }
+
+  function authErrMsg(error) {
+    const m = (error && error.message) || "";
+    if (/Invalid login credentials/i.test(m)) return "メールアドレスまたはパスワードが違います。";
+    if (/User already registered/i.test(m)) return "このメールアドレスは登録済みです。ログインしてください。";
+    if (/Password should be at least/i.test(m)) return "パスワードは6文字以上にしてください。";
+    if (/Email not confirmed/i.test(m)) return "メール確認が未完了です。届いたメールのリンクを開いてください。";
+    if (/valid email/i.test(m)) return "メールアドレスの形式が正しくありません。";
+    return m || "エラーが発生しました。";
+  }
+
+  async function doLogin() {
+    authError.textContent = ""; authMsg.textContent = "";
+    const email = authEmail.value.trim();
+    const password = authPassword.value;
+    if (!email || !password) { authError.textContent = "メールアドレスとパスワードを入力してください。"; return; }
+    setAuthBusy(true);
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    setAuthBusy(false);
+    if (error) { authError.textContent = authErrMsg(error); return; }
+    // onAuthStateChange が後処理を行う
+  }
+
+  async function doSignup() {
+    authError.textContent = ""; authMsg.textContent = "";
+    const email = authEmail.value.trim();
+    const password = authPassword.value;
+    if (!email || !password) { authError.textContent = "メールアドレスとパスワードを入力してください。"; return; }
+    if (password.length < 6) { authError.textContent = "パスワードは6文字以上にしてください。"; return; }
+    setAuthBusy(true);
+    const { data, error } = await sb.auth.signUp({ email, password });
+    setAuthBusy(false);
+    if (error) { authError.textContent = authErrMsg(error); return; }
+    if (data.session) {
+      authMsg.textContent = "登録しました。";
+    } else {
+      authMsg.textContent = "確認メールを送りました。メール内のリンクを開いてからログインしてください。";
+    }
+  }
+
+  async function doLogout() {
+    await sb.auth.signOut();
+    // onAuthStateChange が画面切り替えを行う
+  }
+
+  async function onLoggedIn(sessionUser) {
+    user = sessionUser;
+    userEmailEl.textContent = user.email || "";
+    showApp();
+    setSync(navigator.onLine ? "online" : "offline");
+    await fullSync();
+  }
+
+  function onLoggedOut() {
+    user = null;
+    tasks = [];
+    save();
+    saveQueue([]);
+    authEmail.value = "";
+    authPassword.value = "";
+    authError.textContent = "";
+    authMsg.textContent = "";
+    render();
+    showAuth();
+  }
+
+  loginBtn.addEventListener("click", doLogin);
+  signupBtn.addEventListener("click", doSignup);
+  logoutBtn.addEventListener("click", doLogout);
+  authPassword.addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+
+  // オンライン復帰時に同期
+  window.addEventListener("online", () => { setSync("syncing"); fullSync(); });
+  window.addEventListener("offline", () => setSync("offline"));
+
+  // ================= 起動 =================
+  async function init() {
+    render(); // まずローカルのキャッシュを表示
+    if (!sb) {
+      // Supabase が読み込めない場合はローカルのみで動作
+      showApp();
+      setSync("offline");
+      return;
+    }
+    const { data: { session } } = await sb.auth.getSession();
+    if (session && session.user) {
+      await onLoggedIn(session.user);
+    } else {
+      onLoggedOut();
+    }
+    sb.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session && session.user) {
+        if (!user || user.id !== session.user.id) onLoggedIn(session.user);
+      } else if (event === "SIGNED_OUT") {
+        onLoggedOut();
+      }
+    });
+
+    // 他端末での変更をリアルタイム反映
+    sb.channel("tasks-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => {
+        if (user && navigator.onLine && !flushing) pullFromServer();
+      })
+      .subscribe();
+  }
+
+  init();
 </script>
 </body>
 </html>

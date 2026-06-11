@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ToDo アプリ</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --accent: #4f6df5;
+    --accent-hover: #3d59e0;
+    --text: #1f2430;
+    --muted: #8b91a0;
+    --border: #e3e6ec;
+    --done: #a0a6b3;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 40px 16px;
+  }
+  .app {
+    width: 100%;
+    max-width: 520px;
+  }
+  h1 {
+    font-size: 1.6rem;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-bottom: 24px;
+  }
+  .input-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  #task-input {
+    flex: 1;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 1rem;
+    background: var(--card);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  #task-input:focus { border-color: var(--accent); }
+  #due-input {
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 0.9rem;
+    background: var(--card);
+    color: var(--text);
+    outline: none;
+  }
+  #due-input:focus { border-color: var(--accent); }
+  #add-btn {
+    padding: 0 20px;
+    border: none;
+    border-radius: 10px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  #add-btn:hover { background: var(--accent-hover); }
+  .hint {
+    font-size: 0.76rem;
+    color: var(--muted);
+    margin-bottom: 8px;
+    line-height: 1.5;
+  }
+  .parse-preview {
+    min-height: 0;
+    font-size: 0.8rem;
+    color: var(--accent);
+    margin-bottom: 16px;
+    word-break: break-word;
+  }
+  .parse-preview:empty { margin-bottom: 0; }
+  .controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .filters {
+    display: flex;
+    gap: 6px;
+  }
+  .sort-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+  #sort-select {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card);
+    color: var(--text);
+    font-size: 0.82rem;
+    cursor: pointer;
+    outline: none;
+  }
+  .filter-btn {
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--card);
+    color: var(--muted);
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .filter-btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  ul { list-style: none; }
+  .task {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    animation: pop 0.15s ease;
+  }
+  @keyframes pop { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; } }
+  .task input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: var(--accent);
+    flex-shrink: 0;
+  }
+  .task .body {
+    flex: 1;
+    min-width: 0;
+  }
+  .task .label {
+    word-break: break-word;
+    cursor: pointer;
+  }
+  .task.done .label {
+    text-decoration: line-through;
+    color: var(--done);
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .chip {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+  .task.done .chip { opacity: 0.55; }
+  .due {
+    display: inline-block;
+    font-size: 0.74rem;
+    color: var(--muted);
+  }
+  .due.overdue { color: #e5484d; font-weight: 600; }
+  .due.soon { color: #d98700; }
+  .task.done .due { color: var(--done); font-weight: 400; }
+  .delete-btn {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 1.2rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px;
+    border-radius: 6px;
+    transition: all 0.15s;
+  }
+  .delete-btn:hover { color: #e5484d; background: #fdeced; }
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 16px;
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+  #clear-done {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.82rem;
+  }
+  #clear-done:hover { color: #e5484d; text-decoration: underline; }
+  .empty {
+    text-align: center;
+    color: var(--muted);
+    padding: 32px 0;
+    font-size: 0.9rem;
+  }
+</style>
+</head>
+<body>
+  <div class="app">
+    <h1>ToDo</h1>
+    <p class="subtitle">タスクはこのブラウザに自動保存されます</p>
+
+    <div class="input-row">
+      <input id="task-input" type="text" placeholder="例: レポート提出 明日 #仕事" autocomplete="off">
+      <button id="add-btn">追加</button>
+    </div>
+    <p class="hint">締切やカテゴリーは文章に混ぜて入力できます。例: 「買い物 6/15 #プライベート」「掃除 来週月曜」「請求書 3日後 #仕事」</p>
+    <div id="preview" class="parse-preview"></div>
+
+    <div class="controls">
+      <div class="filters">
+        <button class="filter-btn active" data-filter="all">すべて</button>
+        <button class="filter-btn" data-filter="active">未完了</button>
+        <button class="filter-btn" data-filter="done">完了</button>
+      </div>
+      <label class="sort-row">
+        カテゴリー
+        <select id="category-filter">
+          <option value="all">すべて</option>
+        </select>
+      </label>
+      <label class="sort-row">
+        並び替え
+        <select id="sort-select">
+          <option value="created">追加順</option>
+          <option value="due">締め切りが近い順</option>
+          <option value="name">名前順</option>
+        </select>
+      </label>
+    </div>
+
+    <ul id="task-list"></ul>
+
+    <div class="footer">
+      <span id="count"></span>
+      <button id="clear-done">完了タスクを削除</button>
+    </div>
+  </div>
+
+<script>
+  const STORAGE_KEY = "todo-app-tasks";
+  const input = document.getElementById("task-input");
+  const preview = document.getElementById("preview");
+  const categoryFilter = document.getElementById("category-filter");
+  const sortSelect = document.getElementById("sort-select");
+  const addBtn = document.getElementById("add-btn");
+  const list = document.getElementById("task-list");
+  const countEl = document.getElementById("count");
+  const clearBtn = document.getElementById("clear-done");
+  const filterBtns = document.querySelectorAll(".filter-btn");
+
+  let tasks = load();
+  let filter = "all";
+  let sortBy = "created";
+  let categoryFilterValue = "all";
+
+  function load() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    } catch {
+      return [];
+    }
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    } catch (e) {
+      console.warn("保存に失敗しました（このタブ内でのみ保持されます）", e);
+    }
+  }
+
+  function fmt(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function parseDate(text) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const add = n => { const d = new Date(today); d.setDate(d.getDate() + n); return d; };
+    const thisOrNextYear = (mon, day) => {
+      let d = new Date(today.getFullYear(), mon - 1, day);
+      if (d < today) d.setFullYear(d.getFullYear() + 1);
+      return d;
+    };
+    const wmap = { 日: 0, 月: 1, 火: 2, 水: 3, 木: 4, 金: 5, 土: 6 };
+    const dow = today.getDay();
+    let m;
+
+    if (m = text.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/))
+      return { due: fmt(new Date(+m[1], +m[2] - 1, +m[3])), matched: m[0] };
+
+    if (m = text.match(/(\d{1,2})月(\d{1,2})日?/))
+      return { due: fmt(thisOrNextYear(+m[1], +m[2])), matched: m[0] };
+
+    if (m = text.match(/(\d+)日後/)) return { due: fmt(add(+m[1])), matched: m[0] };
+    if (m = text.match(/(\d+)週間後/)) return { due: fmt(add(7 * +m[1])), matched: m[0] };
+
+    if (m = text.match(/明後日|あさって/)) return { due: fmt(add(2)), matched: m[0] };
+    if (m = text.match(/明日|あした|あす/)) return { due: fmt(add(1)), matched: m[0] };
+    if (m = text.match(/今日|本日/)) return { due: fmt(add(0)), matched: m[0] };
+
+    if (m = text.match(/来週末|今週末|週末/)) {
+      let until = (6 - dow + 7) % 7;
+      if (m[0] === "来週末") until += 7;
+      return { due: fmt(add(until)), matched: m[0] };
+    }
+
+    if (m = text.match(/(来週)?([日月火水木金土])曜日?/)) {
+      let until = (wmap[m[2]] - dow + 7) % 7;
+      if (m[1]) until += 7;
+      else if (until === 0) until = 7;
+      return { due: fmt(add(until)), matched: m[0] };
+    }
+
+    if (m = text.match(/来週/)) return { due: fmt(add(7)), matched: m[0] };
+
+    if (m = text.match(/(?<!\d)(\d{1,2})\/(\d{1,2})(?!\d)/))
+      return { due: fmt(thisOrNextYear(+m[1], +m[2])), matched: m[0] };
+
+    return null;
+  }
+
+  function parseInput(raw) {
+    let text = " " + raw + " ";
+    let category = null, due = null;
+
+    const cm = text.match(/[#＃]([^\s#＃]+)/);
+    if (cm) { category = cm[1]; text = text.replace(cm[0], " "); }
+
+    const d = parseDate(text);
+    if (d) { due = d.due; text = text.replace(d.matched, " "); }
+
+    const title = text.replace(/\s+/g, " ").trim();
+    return { title, due, category };
+  }
+
+  function addTask(raw) {
+    const parsed = parseInput(raw);
+    if (!parsed.title) return;
+    tasks.push({ id: Date.now(), text: parsed.title, done: false, due: parsed.due, category: parsed.category });
+    save();
+    render();
+  }
+
+  function toggleTask(id) {
+    const t = tasks.find(t => t.id === id);
+    if (t) { t.done = !t.done; save(); render(); }
+  }
+
+  function deleteTask(id) {
+    tasks = tasks.filter(t => t.id !== id);
+    save();
+    render();
+  }
+
+  function clearDone() {
+    tasks = tasks.filter(t => !t.done);
+    save();
+    render();
+  }
+
+  function startOfToday() {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  function dueInfo(due) {
+    if (!due) return null;
+    const date = new Date(due + "T00:00:00");
+    const today = startOfToday();
+    const diffDays = Math.round((date - today) / 86400000);
+    let cls = "", label = `締切 ${due}`;
+    if (diffDays < 0) { cls = "overdue"; label = `締切 ${due}（${-diffDays}日超過）`; }
+    else if (diffDays === 0) { cls = "soon"; label = `締切 ${due}（今日）`; }
+    else if (diffDays === 1) { cls = "soon"; label = `締切 ${due}（明日）`; }
+    else if (diffDays <= 3) { cls = "soon"; label = `締切 ${due}（あと${diffDays}日）`; }
+    return { cls, label };
+  }
+
+  function sortTasks(arr) {
+    const copy = [...arr];
+    if (sortBy === "due") {
+      copy.sort((a, b) => {
+        if (!a.due && !b.due) return a.id - b.id;
+        if (!a.due) return 1;
+        if (!b.due) return -1;
+        return a.due.localeCompare(b.due) || a.id - b.id;
+      });
+    } else if (sortBy === "name") {
+      copy.sort((a, b) => a.text.localeCompare(b.text, "ja"));
+    } else {
+      copy.sort((a, b) => a.id - b.id);
+    }
+    return copy;
+  }
+
+  function categoryColors(name) {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = (hash * 31 + name.charCodeAt(i)) % 360;
+    }
+    return { bg: `hsl(${hash}, 70%, 92%)`, fg: `hsl(${hash}, 55%, 32%)` };
+  }
+
+  function categories() {
+    return [...new Set(tasks.map(t => t.category).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, "ja"));
+  }
+
+  function refreshCategoryControls() {
+    const cats = categories();
+    const current = categoryFilterValue;
+    categoryFilter.innerHTML = '<option value="all">すべて</option>';
+    for (const c of cats) {
+      const opt = document.createElement("option");
+      opt.value = c;
+      opt.textContent = c;
+      categoryFilter.appendChild(opt);
+    }
+    categoryFilter.value = cats.includes(current) ? current : "all";
+    categoryFilterValue = categoryFilter.value;
+  }
+
+  function render() {
+    refreshCategoryControls();
+    list.innerHTML = "";
+    const visible = sortTasks(tasks.filter(t =>
+      (filter === "all" ? true : filter === "active" ? !t.done : t.done) &&
+      (categoryFilterValue === "all" ? true : t.category === categoryFilterValue)
+    ));
+
+    if (visible.length === 0) {
+      const li = document.createElement("li");
+      li.className = "empty";
+      li.textContent = filter === "all" ? "タスクはまだありません" : "該当するタスクはありません";
+      list.appendChild(li);
+    }
+
+    for (const t of visible) {
+      const li = document.createElement("li");
+      li.className = "task" + (t.done ? " done" : "");
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = t.done;
+      cb.addEventListener("change", () => toggleTask(t.id));
+
+      const body = document.createElement("div");
+      body.className = "body";
+
+      const label = document.createElement("div");
+      label.className = "label";
+      label.textContent = t.text;
+      label.addEventListener("click", () => toggleTask(t.id));
+      body.appendChild(label);
+
+      const info = dueInfo(t.due);
+      if (t.category || info) {
+        const meta = document.createElement("div");
+        meta.className = "meta";
+
+        if (t.category) {
+          const chip = document.createElement("span");
+          chip.className = "chip";
+          const c = categoryColors(t.category);
+          chip.style.background = c.bg;
+          chip.style.color = c.fg;
+          chip.textContent = t.category;
+          meta.appendChild(chip);
+        }
+
+        if (info) {
+          const due = document.createElement("span");
+          due.className = "due " + info.cls;
+          due.textContent = info.label;
+          meta.appendChild(due);
+        }
+
+        body.appendChild(meta);
+      }
+
+      const del = document.createElement("button");
+      del.className = "delete-btn";
+      del.textContent = "×";
+      del.title = "削除";
+      del.addEventListener("click", () => deleteTask(t.id));
+
+      li.append(cb, body, del);
+      list.appendChild(li);
+    }
+
+    const remaining = tasks.filter(t => !t.done).length;
+    countEl.textContent = `未完了 ${remaining} 件 / 全 ${tasks.length} 件`;
+  }
+
+  function updatePreview() {
+    if (!input.value.trim()) { preview.textContent = ""; return; }
+    const p = parseInput(input.value);
+    const parts = ["→ " + (p.title || "（タイトルなし）")];
+    if (p.due) {
+      const info = dueInfo(p.due);
+      parts.push("締切 " + (info ? info.label.replace("締切 ", "") : p.due));
+    }
+    if (p.category) parts.push("分類 " + p.category);
+    preview.textContent = parts.join("　／　");
+  }
+
+  function submit() {
+    addTask(input.value);
+    input.value = "";
+    preview.textContent = "";
+    input.focus();
+  }
+
+  addBtn.addEventListener("click", submit);
+
+  input.addEventListener("input", updatePreview);
+
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") submit();
+  });
+
+  sortSelect.addEventListener("change", () => {
+    sortBy = sortSelect.value;
+    render();
+  });
+
+  categoryFilter.addEventListener("change", () => {
+    categoryFilterValue = categoryFilter.value;
+    render();
+  });
+
+  clearBtn.addEventListener("click", clearDone);
+
+  filterBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      filter = btn.dataset.filter;
+      filterBtns.forEach(b => b.classList.toggle("active", b === btn));
+      render();
+    });
+  });
+
+  render();
+</script>
+</body>
+</html>

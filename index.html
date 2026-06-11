@@ -201,6 +201,40 @@
     transition: all 0.15s;
   }
   .delete-btn:hover { color: #e5484d; background: #fdeced; }
+  .edit-btn {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 1rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px 6px;
+    border-radius: 6px;
+    transition: all 0.15s;
+  }
+  .edit-btn:hover { color: var(--accent); background: rgba(0, 0, 0, 0.04); }
+  .task.editing { gap: 8px; }
+  .edit-input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    background: #fff;
+    color: var(--text);
+    outline: none;
+  }
+  .edit-action {
+    flex-shrink: 0;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  .edit-action.save { background: var(--accent); color: #fff; }
+  .edit-action.cancel { background: transparent; color: var(--muted); }
   .footer {
     display: flex;
     justify-content: space-between;
@@ -283,6 +317,7 @@
   let filter = "all";
   let sortBy = "created";
   let categoryFilterValue = "all";
+  let editingId = null;
 
   function load() {
     try {
@@ -368,10 +403,16 @@
     return { title, due, category };
   }
 
+  let idCounter = 0;
+  function newId() {
+    // Date.now() だけだと同一ミリ秒内で衝突するためカウンターを併用して一意化
+    return Date.now() * 1000 + (idCounter++ % 1000);
+  }
+
   function addTask(raw) {
     const parsed = parseInput(raw);
     if (!parsed.title) return;
-    tasks.push({ id: Date.now(), text: parsed.title, done: false, due: parsed.due, category: parsed.category });
+    tasks.push({ id: newId(), text: parsed.title, done: false, due: parsed.due, category: parsed.category });
     save();
     render();
   }
@@ -383,6 +424,36 @@
 
   function deleteTask(id) {
     tasks = tasks.filter(t => t.id !== id);
+    save();
+    render();
+  }
+
+  function taskToInput(t) {
+    let s = t.text;
+    if (t.due) s += " " + t.due;
+    if (t.category) s += " #" + t.category;
+    return s;
+  }
+
+  function startEdit(id) {
+    editingId = id;
+    render();
+  }
+
+  function cancelEdit() {
+    editingId = null;
+    render();
+  }
+
+  function saveEdit(id, raw) {
+    const t = tasks.find(t => t.id === id);
+    if (!t) return;
+    const parsed = parseInput(raw);
+    if (!parsed.title) return; // タイトルが空なら編集を続行
+    t.text = parsed.title;
+    t.due = parsed.due;
+    t.category = parsed.category;
+    editingId = null;
     save();
     render();
   }
@@ -470,6 +541,7 @@
   function render() {
     refreshCategoryControls();
     list.innerHTML = "";
+    let editInputEl = null;
     const visible = sortTasks(tasks.filter(t =>
       (filter === "all" ? true : filter === "active" ? !t.done : t.done) &&
       (categoryFilterValue === "all" ? true : t.category === categoryFilterValue)
@@ -489,6 +561,30 @@
         const cc = categoryColors(t.category);
         li.style.background = cc.card;
         li.style.borderColor = cc.border;
+      }
+
+      if (t.id === editingId) {
+        li.classList.add("editing");
+        const ei = document.createElement("input");
+        ei.type = "text";
+        ei.className = "edit-input";
+        ei.value = taskToInput(t);
+        ei.addEventListener("keydown", e => {
+          if (e.key === "Enter") saveEdit(t.id, ei.value);
+          else if (e.key === "Escape") cancelEdit();
+        });
+        const saveBtn = document.createElement("button");
+        saveBtn.className = "edit-action save";
+        saveBtn.textContent = "保存";
+        saveBtn.addEventListener("click", () => saveEdit(t.id, ei.value));
+        const cancelBtn = document.createElement("button");
+        cancelBtn.className = "edit-action cancel";
+        cancelBtn.textContent = "取消";
+        cancelBtn.addEventListener("click", cancelEdit);
+        li.append(ei, saveBtn, cancelBtn);
+        list.appendChild(li);
+        editInputEl = ei;
+        continue;
       }
 
       const cb = document.createElement("input");
@@ -530,14 +626,26 @@
         body.appendChild(meta);
       }
 
+      const edit = document.createElement("button");
+      edit.className = "edit-btn";
+      edit.textContent = "✎";
+      edit.title = "編集";
+      edit.addEventListener("click", () => startEdit(t.id));
+
       const del = document.createElement("button");
       del.className = "delete-btn";
       del.textContent = "×";
       del.title = "削除";
       del.addEventListener("click", () => deleteTask(t.id));
 
-      li.append(cb, body, del);
+      li.append(cb, body, edit, del);
       list.appendChild(li);
+    }
+
+    if (editInputEl) {
+      editInputEl.focus();
+      const v = editInputEl.value;
+      editInputEl.setSelectionRange(v.length, v.length);
     }
 
     const remaining = tasks.filter(t => !t.done).length;

@@ -265,10 +265,10 @@
     <p class="subtitle">タスクはこのブラウザに自動保存されます</p>
 
     <div class="input-row">
-      <input id="task-input" type="text" placeholder="例: レポート提出 明日 #仕事" autocomplete="off">
+      <input id="task-input" type="text" placeholder="例: レポート提出 明日 仕事" autocomplete="off">
       <button id="add-btn">追加</button>
     </div>
-    <p class="hint">締切やカテゴリーは文章に混ぜて入力できます。例: 「買い物 6/15 #プライベート」「掃除 来週月曜」「請求書 3日後 #仕事」</p>
+    <p class="hint">スペース区切りで入力すると、<b>最後の単語がカテゴリー</b>になります（# は不要）。締切も文章に混ぜてOK。例: 「牛乳を買う 6/15 買い物」「掃除 来週月曜 家事」</p>
     <div id="preview" class="parse-preview"></div>
 
     <div class="controls">
@@ -393,13 +393,21 @@
     let text = " " + raw + " ";
     let category = null, due = null;
 
+    // 明示的な #カテゴリー（任意。付ければそれを優先）
     const cm = text.match(/[#＃]([^\s#＃]+)/);
     if (cm) { category = cm[1]; text = text.replace(cm[0], " "); }
 
+    // 締切（文章に混ぜて書ける）
     const d = parseDate(text);
     if (d) { due = d.due; text = text.replace(d.matched, " "); }
 
-    const title = text.replace(/\s+/g, " ").trim();
+    // # が無く、語が2つ以上あれば「最後の単語」をカテゴリーにする
+    const tokens = text.trim().split(/\s+/).filter(Boolean);
+    if (!category && tokens.length >= 2) {
+      category = tokens.pop();
+    }
+
+    const title = tokens.join(" ");
     return { title, due, category };
   }
 

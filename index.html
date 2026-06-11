@@ -510,13 +510,27 @@
     { card: "#eaf7eb", bg: "#bce4bf", fg: "#317638", border: "#cfeacf" }
   ];
 
+  // パレットを超えたカテゴリーは黄金角で色相を回し、自動で異なる色を生成
+  function generatedColors(idx) {
+    const hue = Math.round((idx * 137.508) % 360);
+    return {
+      card: `hsl(${hue}, 65%, 96%)`,
+      bg: `hsl(${hue}, 68%, 85%)`,
+      fg: `hsl(${hue}, 42%, 32%)`,
+      border: `hsl(${hue}, 50%, 85%)`
+    };
+  }
+
   function categoryColors(name) {
     const order = [];
     for (const t of tasks) {
       if (t.category && !order.includes(t.category)) order.push(t.category);
     }
     const idx = order.indexOf(name);
-    return CATEGORY_PALETTE[(idx < 0 ? 0 : idx) % CATEGORY_PALETTE.length];
+    if (idx < 0) return CATEGORY_PALETTE[0];
+    if (idx < CATEGORY_PALETTE.length) return CATEGORY_PALETTE[idx];
+    // 6個目以降は自動生成（パレット外のインデックスで色相を分散）
+    return generatedColors(idx);
   }
 
   function categories() {
